@@ -1,0 +1,4 @@
+(executable
+ (public_name stubify)
+ (name main)
+ (libraries stubify))

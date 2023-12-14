@@ -1,0 +1,8 @@
+(library
+ (name stubify))
+
+(ocamllex
+ (modules lexer))
+
+(menhir
+ (modules parser))
