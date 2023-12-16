@@ -779,8 +779,16 @@ function_definition1:
       reinstall_function_context d;
       ctx }
 
+(*Note: 2 hacks here:
+    1. We set printing before reading the opening curly brace, because of lookahead,
+        the curly brace will be lexed before the flag is set. Otherwise, the flag is set one
+        character too late.
+    2. We print out the closing curly brace here if needed, because the brace will already have been
+        lexed before the flag is reset.
+        NOTE: doesn't quite work, have extra whitespace
+        *)
 compound_function_statement:
-| "{" midrule({Echo.set_printing();}) block_item_list? midrule({Echo.reset_printing();}) "}"
+| midrule({Echo.set_printing();}) "{" block_item_list? midrule({if not (Echo.get_state()) then print_string("}"); Echo.reset_printing();}) "}"
     {}
 
 start_function:

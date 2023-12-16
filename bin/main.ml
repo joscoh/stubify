@@ -51,7 +51,7 @@ let get_names : string -> unit = fun s ->
   let lines = read_lines chan in
   Stubify.Echo.make_names lines;
   (*For now, print all*)
-  List.iter(print_endline) lines;
+  (*List.iter(print_endline) lines;*)
   close_in chan
 
 
