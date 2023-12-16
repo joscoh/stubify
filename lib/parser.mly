@@ -774,12 +774,23 @@ external_declaration:
 
 function_definition1:
 | declaration_specifiers d = declarator_varname
-    { let ctx = save_context () in
+    { Echo.set_name(identifier d);
+      let ctx = save_context () in
       reinstall_function_context d;
       ctx }
 
+compound_function_statement:
+| "{" midrule({Echo.set_printing();}) block_item_list? midrule({Echo.reset_printing();}) "}"
+    {}
+
+start_function:
+| {Echo.set_printing();}
+
+end_function:
+| {Echo.reset_printing();}
+
 function_definition:
-| ctx = function_definition1 declaration_list? compound_statement
+| ctx = function_definition1 declaration_list? compound_function_statement
     { restore_context ctx }
 
 declaration_list:

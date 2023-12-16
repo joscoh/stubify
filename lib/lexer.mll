@@ -131,114 +131,114 @@ let escape_sequence =
   | universal_character_name
 
 rule initial = parse
-  | whitespace_char_no_newline+   { initial lexbuf }
-  | '\n'                          { new_line lexbuf; initial_linebegin lexbuf }
-  | "/*"                          { multiline_comment lexbuf; initial lexbuf }
-  | "//"                          { singleline_comment lexbuf; initial_linebegin lexbuf }
-  | integer_constant              { CONSTANT }
-  | decimal_floating_constant     { CONSTANT }
-  | hexadecimal_floating_constant { CONSTANT }
+  | whitespace_char_no_newline+ as c   { Echo.print_if c; initial lexbuf }
+  | '\n'                          { Echo.print_always "\n"; new_line lexbuf; initial_linebegin lexbuf }
+  | "/*" as c                         { Echo.print_if c; multiline_comment lexbuf; initial lexbuf }
+  | "//" as c                          { Echo.print_if c; singleline_comment lexbuf; initial_linebegin lexbuf }
+  | integer_constant as c         { Echo.print_if c; CONSTANT }
+  | decimal_floating_constant as c  { Echo.print_if c; CONSTANT }
+  | hexadecimal_floating_constant as c { Echo.print_if c; CONSTANT }
   | preprocessing_number          { failwith "These characters form a preprocessor number, but not a constant" }
-  | (['L' 'u' 'U']|"") "'"        { char lexbuf; char_literal_end lexbuf; CONSTANT }
-  | (['L' 'u' 'U']|""|"u8") "\""  { string_literal lexbuf; STRING_LITERAL }
-  | "..."                         { ELLIPSIS }
-  | "+="                          { ADD_ASSIGN }
-  | "-="                          { SUB_ASSIGN }
-  | "*="                          { MUL_ASSIGN }
-  | "/="                          { DIV_ASSIGN }
-  | "%="                          { MOD_ASSIGN }
-  | "|="                          { OR_ASSIGN }
-  | "&="                          { AND_ASSIGN }
-  | "^="                          { XOR_ASSIGN }
-  | "<<="                         { LEFT_ASSIGN }
-  | ">>="                         { RIGHT_ASSIGN }
-  | "<<"                          { LEFT }
-  | ">>"                          { RIGHT }
-  | "=="                          { EQEQ }
-  | "!="                          { NEQ }
-  | "<="                          { LEQ }
-  | ">="                          { GEQ }
-  | "="                           { EQ }
-  | "<"                           { LT }
-  | ">"                           { GT }
-  | "++"                          { INC }
-  | "--"                          { DEC }
-  | "->"                          { PTR }
-  | "+"                           { PLUS }
-  | "-"                           { MINUS }
-  | "*"                           { STAR }
-  | "/"                           { SLASH }
-  | "%"                           { PERCENT }
-  | "!"                           { BANG }
-  | "&&"                          { ANDAND }
-  | "||"                          { BARBAR }
-  | "&"                           { AND }
-  | "|"                           { BAR }
-  | "^"                           { HAT }
-  | "?"                           { QUESTION }
-  | ":"                           { COLON }
-  | "~"                           { TILDE }
-  | "{"|"<%"                      { LBRACE }
-  | "}"|"%>"                      { RBRACE }
-  | "["|"<:"                      { LBRACK }
-  | "]"|":>"                      { RBRACK }
-  | "("                           { LPAREN }
-  | ")"                           { RPAREN }
-  | ";"                           { SEMICOLON }
-  | ","                           { COMMA }
-  | "."                           { DOT }
-  | "_Alignas"                    { ALIGNAS }
-  | "_Alignof"                    { ALIGNOF }
-  | "_Atomic"                     { ATOMIC }
-  | "_Bool"                       { BOOL }
-  | "_Complex"                    { COMPLEX }
-  | "_Generic"                    { GENERIC }
-  | "_Imaginary"                  { IMAGINARY }
-  | "_Noreturn"                   { NORETURN }
-  | "_Static_assert"              { STATIC_ASSERT }
-  | "_Thread_local"               { THREAD_LOCAL }
-  | "auto"                        { AUTO }
-  | "break"                       { BREAK }
-  | "case"                        { CASE }
-  | "char"                        { CHAR }
-  | "const"                       { CONST }
-  | "continue"                    { CONTINUE }
-  | "default"                     { DEFAULT }
-  | "do"                          { DO }
-  | "double"                      { DOUBLE }
-  | "else"                        { ELSE }
-  | "enum"                        { ENUM }
-  | "extern"                      { EXTERN }
-  | "float"                       { FLOAT }
-  | "for"                         { FOR }
-  | "goto"                        { GOTO }
-  | "if"                          { IF }
-  | "inline"                      { INLINE }
-  | "int"                         { INT }
-  | "long"                        { LONG }
-  | "register"                    { REGISTER }
-  | "restrict"                    { RESTRICT }
-  | "return"                      { RETURN }
-  | "short"                       { SHORT }
-  | "signed"                      { SIGNED }
-  | "sizeof"                      { SIZEOF }
-  | "static"                      { STATIC }
-  | "struct"                      { STRUCT }
-  | "switch"                      { SWITCH }
-  | "typedef"                     { TYPEDEF }
-  | "union"                       { UNION }
-  | "unsigned"                    { UNSIGNED }
-  | "void"                        { VOID }
-  | "volatile"                    { VOLATILE }
-  | "while"                       { WHILE }
-  | identifier as id              { NAME id }
+  | (['L' 'u' 'U']|"") "'" as c        { Echo.print_if c; char lexbuf; char_literal_end lexbuf; CONSTANT }
+  | (['L' 'u' 'U']|""|"u8") "\"" as c  { Echo.print_if c; string_literal lexbuf; STRING_LITERAL }
+  | "..." as c                         { Echo.print_if c; ELLIPSIS }
+  | "+=" as c                          { Echo.print_if c; ADD_ASSIGN }
+  | "-=" as c                            { Echo.print_if c; SUB_ASSIGN }
+  | "*=" as c                            { Echo.print_if c; MUL_ASSIGN }
+  | "/=" as c                            { Echo.print_if c; DIV_ASSIGN }
+  | "%=" as c                            { Echo.print_if c; MOD_ASSIGN }
+  | "|=" as c                            { Echo.print_if c; OR_ASSIGN }
+  | "&=" as c                            { Echo.print_if c; AND_ASSIGN }
+  | "^=" as c                            { Echo.print_if c; XOR_ASSIGN }
+  | "<<=" as c                           { Echo.print_if c; LEFT_ASSIGN }
+  | ">>=" as c                           { Echo.print_if c; RIGHT_ASSIGN }
+  | "<<" as c                            { Echo.print_if c; LEFT }
+  | ">>" as c                            { Echo.print_if c; RIGHT }
+  | "==" as c                            { Echo.print_if c; EQEQ }
+  | "!=" as c                            { Echo.print_if c; NEQ }
+  | "<=" as c                            { Echo.print_if c; LEQ }
+  | ">=" as c                            { Echo.print_if c; GEQ }
+  | "=" as c                             { Echo.print_char_if c; EQ }
+  | "<" as c                             { Echo.print_char_if c; LT }
+  | ">" as c                             { Echo.print_char_if c; GT }
+  | "++" as c                            { Echo.print_if c; INC }
+  | "--" as c                            { Echo.print_if c; DEC }
+  | "->" as c                            { Echo.print_if c; PTR }
+  | "+" as c                             { Echo.print_char_if c; PLUS }
+  | "-" as c                             { Echo.print_char_if c; MINUS }
+  | "*" as c                             { Echo.print_char_if c; STAR }
+  | "/" as c                             { Echo.print_char_if c; SLASH }
+  | "%" as c                             { Echo.print_char_if c; PERCENT }
+  | "!" as c                             { Echo.print_char_if c; BANG }
+  | "&&" as c                            { Echo.print_if c; ANDAND }
+  | "||" as c                            { Echo.print_if c; BARBAR }
+  | "&" as c                             { Echo.print_char_if c; AND }
+  | "|" as c                             { Echo.print_char_if c; BAR }
+  | "^" as c                             { Echo.print_char_if c; HAT }
+  | "?" as c                             { Echo.print_char_if c; QUESTION }
+  | ":" as c                             { Echo.print_char_if c; COLON }
+  | "~" as c                             { Echo.print_char_if c; TILDE }
+  | "{"|"<%" as c                        { Echo.print_if c; LBRACE }
+  | "}"|"%>" as c                        { Echo.print_if c; RBRACE }
+  | "["|"<:" as c                        { Echo.print_if c; LBRACK }
+  | "]"|":>"as c                       { Echo.print_if c; RBRACK }
+  | "(" as c                             { Echo.print_char_if c; LPAREN }
+  | ")" as c                             { Echo.print_char_if c; RPAREN }
+  | ";" as c                             { Echo.print_char_if c; SEMICOLON }
+  | "," as c                             { Echo.print_char_if c; COMMA }
+  | "." as c                             { Echo.print_char_if c; DOT }
+  | "_Alignas" as c                      { Echo.print_if c; ALIGNAS }
+  | "_Alignof" as c                      { Echo.print_if c; ALIGNOF }
+  | "_Atomic" as c                       { Echo.print_if c; ATOMIC }
+  | "_Bool" as c                         { Echo.print_if c; BOOL }
+  | "_Complex" as c                      { Echo.print_if c; COMPLEX }
+  | "_Generic" as c                      { Echo.print_if c; GENERIC }
+  | "_Imaginary" as c                    { Echo.print_if c; IMAGINARY }
+  | "_Noreturn" as c                     { Echo.print_if c; NORETURN }
+  | "_Static_assert" as c                { Echo.print_if c; STATIC_ASSERT }
+  | "_Thread_local" as c                 { Echo.print_if c; THREAD_LOCAL }
+  | "auto" as c                          { Echo.print_if c; AUTO }
+  | "break" as c                         { Echo.print_if c; BREAK }
+  | "case" as c                          { Echo.print_if c; CASE }
+  | "char" as c                          { Echo.print_if c; CHAR }
+  | "const" as c                         { Echo.print_if c; CONST }
+  | "continue" as c                      { Echo.print_if c; CONTINUE }
+  | "default" as c                       { Echo.print_if c; DEFAULT }
+  | "do" as c                            { Echo.print_if c; DO }
+  | "double" as c                        { Echo.print_if c; DOUBLE }
+  | "else" as c                          { Echo.print_if c; ELSE }
+  | "enum" as c                          { Echo.print_if c; ENUM }
+  | "extern" as c                        { Echo.print_if c; EXTERN }
+  | "float" as c                         { Echo.print_if c; FLOAT }
+  | "for" as c                           { Echo.print_if c; FOR }
+  | "goto" as c                          { Echo.print_if c; GOTO }
+  | "if" as c                            { Echo.print_if c; IF }
+  | "inline" as c                        { Echo.print_if c; INLINE }
+  | "int" as c                           { Echo.print_if c; INT }
+  | "long" as c                          { Echo.print_if c; LONG }
+  | "register" as c                      { Echo.print_if c; REGISTER }
+  | "restrict" as c                      { Echo.print_if c; RESTRICT }
+  | "return" as c                        { Echo.print_if c; RETURN }
+  | "short" as c                         { Echo.print_if c; SHORT }
+  | "signed" as c                        { Echo.print_if c; SIGNED }
+  | "sizeof" as c                        { Echo.print_if c; SIZEOF }
+  | "static" as c                        { Echo.print_if c; STATIC }
+  | "struct" as c                        { Echo.print_if c; STRUCT }
+  | "switch" as c                        { Echo.print_if c; SWITCH }
+  | "typedef" as c                       { Echo.print_if c; TYPEDEF }
+  | "union" as c                         { Echo.print_if c; UNION }
+  | "unsigned" as c                      { Echo.print_if c; UNSIGNED }
+  | "void" as c                          { Echo.print_if c; VOID }
+  | "volatile" as c                      { Echo.print_if c; VOLATILE }
+  | "while" as c                         { Echo.print_if c; WHILE }
+  | identifier as id              { Echo.print_if id; NAME id }
   | eof                           { EOF }
   | _                             { failwith "Lexer error" }
 
 and initial_linebegin = parse
-  | '\n'                          { new_line lexbuf; initial_linebegin lexbuf }
-  | whitespace_char_no_newline    { initial_linebegin lexbuf }
-  | '#' | "%:"                    { hash lexbuf }
+  | '\n'                          { Echo.print_always "\n"; new_line lexbuf; initial_linebegin lexbuf }
+  | whitespace_char_no_newline as c    { Echo.print_char_if c; initial_linebegin lexbuf }
+  | '#' | "%:" as c                    { Echo.print_always c; hash lexbuf }
   | ""                            { initial lexbuf }
 
 and char = parse
@@ -262,10 +262,12 @@ and string_literal = parse
 (* We assume gcc -E syntax but try to tolerate variations. *)
 and hash = parse
   | whitespace_char_no_newline+ digit* whitespace_char_no_newline*
-    "\"" [^ '\n' '\"']* "\"" [^ '\n']* '\n'
+    "\"" [^ '\n' '\"']* "\"" [^ '\n']* '\n' as s
+    (*TODO: copied from below, does pattern matching fall through for LEX?*)
+    { Echo.print_always s; new_line lexbuf; initial_linebegin lexbuf }
   | whitespace_char_no_newline* "pragma"
-    whitespace_char_no_newline+ [^ '\n']* '\n'
-      { new_line lexbuf; initial_linebegin lexbuf }
+    whitespace_char_no_newline+ [^ '\n']* '\n' as s
+      { Echo.print_always s; new_line lexbuf; initial_linebegin lexbuf }
   | [^ '\n']* eof
       { failwith "unexpected end of file" }
   | _
@@ -273,16 +275,16 @@ and hash = parse
 
 (* Multi-line comment terminated by "*/" *)
 and multiline_comment = parse
-  | "*/"   { () }
+  | "*/" as c   { Echo.print_if c; () }
   | eof    { failwith "unterminated comment" }
-  | '\n'   { new_line lexbuf; multiline_comment lexbuf }
-  | _      { multiline_comment lexbuf }
+  | '\n'   { Echo.print_always "\n"; new_line lexbuf; multiline_comment lexbuf }
+  | _ as c      { Echo.print_char_if c; multiline_comment lexbuf }
 
 (* Single-line comment terminated by a newline *)
 and singleline_comment = parse
-  | '\n'   { new_line lexbuf }
+  | '\n'   { Echo.print_always "\n"; new_line lexbuf }
   | eof    { () }
-  | _      { singleline_comment lexbuf }
+  | _ as c      { Echo.print_char_if c; singleline_comment lexbuf }
 
 {
 
