@@ -21,3 +21,5 @@ val print_char_if: char -> unit
 
 (*Print/echo the string no matter the current state of the flag (used for preserving preprocessing info)*)
 val print_always: string -> unit
+
+val print_buffer: unit -> unit

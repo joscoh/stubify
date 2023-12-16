@@ -193,6 +193,7 @@ rule initial = parse
   | "_Bool" as c                         { Echo.print_if c; BOOL }
   | "_Complex" as c                      { Echo.print_if c; COMPLEX }
   | "_Generic" as c                      { Echo.print_if c; GENERIC }
+  | "__extension__" as c                 { Echo.print_if c; initial lexbuf} (*Just as with CompCert, we ignore "__extension__"*)
   | "_Imaginary" as c                    { Echo.print_if c; IMAGINARY }
   | "_Noreturn" as c                     { Echo.print_if c; NORETURN }
   | "_Static_assert" as c                { Echo.print_if c; STATIC_ASSERT }

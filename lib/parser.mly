@@ -788,7 +788,7 @@ function_definition1:
         NOTE: doesn't quite work, have extra whitespace
         *)
 compound_function_statement:
-| midrule({Echo.set_printing();}) "{" block_item_list? midrule({if not (Echo.get_state()) then print_string("}"); Echo.reset_printing();}) "}"
+| "{" midrule({Echo.set_printing();}) block_item_list? midrule({Echo.reset_printing();}) "}"
     {}
 
 start_function:

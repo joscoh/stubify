@@ -91,4 +91,5 @@ let _ =
             (fun o -> raise (Arg.Bad (Printf.sprintf "Unrecognized option \"%s\"" o)))
             usage_msg;
   let lexbuf = Lexing.from_channel stdin in
-  !parser lexer lexbuf
+  !parser lexer lexbuf;
+  Stubify.Echo.print_buffer()
