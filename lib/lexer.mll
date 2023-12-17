@@ -1,43 +1,128 @@
-(*
-Jacques-Henri Jourdan, Inria Paris
-François Pottier, Inria Paris
-
-Copyright (c) 2016-2017, Inria
-All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
-    * Redistributions of source code must retain the above copyright
-      notice, this list of conditions and the following disclaimer.
-    * Redistributions in binary form must reproduce the above copyright
-      notice, this list of conditions and the following disclaimer in the
-      documentation and/or other materials provided with the distribution.
-    * Neither the name of Inria nor the
-      names of its contributors may be used to endorse or promote products
-      derived from this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL INRIA BE LIABLE FOR ANY
-DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*)
+(* *********************************************************************)
+(*                                                                     *)
+(*              The Compcert verified compiler                         *)
+(*                                                                     *)
+(*          Jacques-Henri Jourdan, INRIA Paris-Rocquencourt            *)
+(*             Xavier Leroy, Collège de France and Inria               *)
+(*                                                                     *)
+(*  Copyright Institut National de Recherche en Informatique et en     *)
+(*  Automatique.  All rights reserved.  This file is distributed       *)
+(*  under the terms of the GNU Lesser General Public License as        *)
+(*  published by the Free Software Foundation, either version 2.1 of   *)
+(*  the License, or  (at your option) any later version.               *)
+(*  This file is also distributed under the terms of the               *)
+(*  INRIA Non-Commercial License Agreement.                            *)
+(*                                                                     *)
+(* *********************************************************************)
 
 {
 open Lexing
-open Context
 open Parser
-open Options
-(*open Echo*)
+open Pre_parser_aux
 
-let init _filename channel : Lexing.lexbuf =
-  Lexing.from_channel channel
+module SSet = Set.Make(String)
 
+let lexicon : (string, token) Hashtbl.t = Hashtbl.create 17
+let ignored_keywords : SSet.t ref = ref SSet.empty
+
+let () =
+  List.iter (fun (key, builder) -> Hashtbl.add lexicon key builder)
+    [ 
+      ("_Alignas", ALIGNAS);
+      ("_Alignof", ALIGNOF);
+      ("_Bool",  UNDERSCORE_BOOL);
+      ("_Generic",  GENERIC);
+      ("_Complex", COMPLEX  (*reserved_keyword "_Complex"*));
+      ("_Imaginary",  IMAGINARY (*reserved_keyword "_Imaginary"*));
+      ("_Static_assert",  STATIC_ASSERT);
+      ("__alignof",  ALIGNOF);
+      ("__alignof__",  ALIGNOF);
+      ("__asm",  ASM);
+      ("__asm__",  ASM);
+      ("__attribute",  ATTRIBUTE);
+      ("__attribute__",  ATTRIBUTE);
+      ("__builtin_va_arg",  BUILTIN_VA_ARG);
+      ("__builtin_offsetof",  BUILTIN_OFFSETOF);
+      ("__const",  CONST);
+      ("__const__",  CONST);
+      ("__inline",  INLINE);
+      ("__inline__",  INLINE);
+      ("__packed__",  PACKED);
+      ("__restrict",  RESTRICT);
+      ("__restrict__",  RESTRICT);
+      ("__signed",  SIGNED);
+      ("__signed__",  SIGNED);
+      ("__volatile",  VOLATILE);
+      ("__volatile__",  VOLATILE);
+      ("asm",  ASM);
+      ("auto",  AUTO);
+      ("break",  BREAK);
+      ("case",  CASE);
+      ("char",  CHAR);
+      ("const",  CONST);
+      ("continue",  CONTINUE);
+      ("default",  DEFAULT);
+      ("do",  DO);
+      ("double",  DOUBLE);
+      ("else",  ELSE);
+      ("enum",  ENUM);
+      ("extern",  EXTERN);
+      ("float",  FLOAT);
+      ("for",  FOR);
+      ("goto",  GOTO);
+      ("if",  IF);
+      ("inline",  INLINE);
+      ("_Noreturn",  NORETURN);
+      ("int",  INT);
+      ("long",  LONG);
+      ("register",  REGISTER);
+      ("restrict",  RESTRICT);
+      ("return",  RETURN);
+      ("short",  SHORT);
+      ("signed",  SIGNED);
+      ("sizeof",  SIZEOF);
+      ("static",  STATIC);
+      ("struct",  STRUCT);
+      ("switch",  SWITCH );
+      ("typedef",  TYPEDEF);
+      ("union",  UNION);
+      ("unsigned",  UNSIGNED);
+      ("void",  VOID);
+      ("volatile",  VOLATILE);
+      ("while",  WHILE)];
+      (*JOSH - for now, assume not diab*)
+  (*if Configuration.system <> "diab" then*)
+    (* We can ignore the __extension__ GCC keyword. *)
+    ignored_keywords := SSet.add "__extension__" !ignored_keywords
+
+(*JOSH - taken from x86 folder in CompCert - not best way to do it *)
+let builtin_typedefs = [
+    "__builtin_va_list";
+  ]
+
+let init_ctx : SSet.t = SSet.of_list builtin_typedefs
+
+let types_context : SSet.t ref = ref init_ctx
+
+let _ =
+  (* See comments in pre_parser_aux.ml *)
+  save_context := begin fun () ->
+    let save = !types_context in
+    fun () -> types_context := save
+  end;
+
+  declare_varname := begin fun id ->
+    types_context := SSet.remove id !types_context
+  end;
+
+  declare_typename := begin fun id ->
+    types_context := SSet.add id !types_context
+  end
+
+let init filename channel : Lexing.lexbuf =
+  let lb = Lexing.from_channel channel in
+  lb.lex_curr_p <- {lb.lex_curr_p with pos_fname = filename; pos_lnum = 1};
+  lb
 }
 
 (* Identifiers *)
@@ -48,17 +133,18 @@ let nondigit = ['_' 'a'-'z' 'A'-'Z']
 let hex_quad = hexadecimal_digit hexadecimal_digit
                  hexadecimal_digit hexadecimal_digit
 let universal_character_name =
-    "\\u" hex_quad
-  | "\\U" hex_quad hex_quad
+    "\\u" (hex_quad as n)
+  | "\\U" (hex_quad hex_quad as n)
 
 let identifier_nondigit =
     nondigit
-  | universal_character_name
+(*| universal_character_name*)
+  | '$'
 
 let identifier = identifier_nondigit (identifier_nondigit|digit)*
 
 (* Whitespaces *)
-let whitespace_char_no_newline = [' ' '\t' '\012' '\r']
+let whitespace_char_no_newline = [' ' '\t'  '\011' '\012' '\r']
 
 (* Integer constants *)
 let nonzero_digit = ['1'-'9']
@@ -91,24 +177,26 @@ let digit_sequence = digit+
 let floating_suffix = ['f' 'l' 'F' 'L']
 
 let fractional_constant =
-    digit_sequence? '.' digit_sequence
-  | digit_sequence '.'
+    (digit_sequence)? '.' (digit_sequence)
+  | (digit_sequence) '.'
 let exponent_part =
-    ['e' 'E'] sign? digit_sequence
+    'e' ((sign? digit_sequence))
+  | 'E' ((sign? digit_sequence))
 let decimal_floating_constant =
     fractional_constant exponent_part? floating_suffix?
-  | digit_sequence exponent_part floating_suffix?
+  | (digit_sequence) exponent_part floating_suffix?
 
 let hexadecimal_digit_sequence = hexadecimal_digit+
 let hexadecimal_fractional_constant =
-    hexadecimal_digit_sequence? '.' hexadecimal_digit_sequence
-  | hexadecimal_digit_sequence '.'
+    (hexadecimal_digit_sequence)? '.' (hexadecimal_digit_sequence)
+  | (hexadecimal_digit_sequence) '.'
 let binary_exponent_part =
-    ['p' 'P'] sign? digit_sequence
+    'p' ((sign? digit_sequence))
+  | 'P' ((sign? digit_sequence))
 let hexadecimal_floating_constant =
     hexadecimal_prefix hexadecimal_fractional_constant
         binary_exponent_part floating_suffix?
-  | hexadecimal_prefix hexadecimal_digit_sequence
+  | hexadecimal_prefix (hexadecimal_digit_sequence)
         binary_exponent_part floating_suffix?
 
 (* Preprocessing numbers *)
@@ -118,157 +206,102 @@ let preprocessing_number =
 
 (* Character and string constants *)
 let simple_escape_sequence =
-  '\\' ['\''  '\"'  '?'  '\\'  'a'  'b'  'f'  'n'  'r'  't'  'v']
+  '\\' ( ['\''  '\"'  '?'  '\\'  'a'  'b'  'e'  'f'  'n'  'r'  't'  'v'] as c)
 let octal_escape_sequence =
-  '\\' (octal_digit
+  '\\' ((octal_digit
          | octal_digit octal_digit
-         | octal_digit octal_digit octal_digit)
-let hexadecimal_escape_sequence = "\\x" hexadecimal_digit+
-let escape_sequence =
-    simple_escape_sequence
-  | octal_escape_sequence
-  | hexadecimal_escape_sequence
-  | universal_character_name
+         | octal_digit octal_digit octal_digit) as n)
+let hexadecimal_escape_sequence = "\\x" (hexadecimal_digit+ as n)
 
 rule initial = parse
-  | whitespace_char_no_newline+ as c   { Echo.print_if c; initial lexbuf }
   | '\n'                          { Echo.print_always "\n"; new_line lexbuf; initial_linebegin lexbuf }
-  | "/*" as c                         { Echo.print_if c; multiline_comment lexbuf; initial lexbuf }
-  | "//" as c                          { Echo.print_if c; singleline_comment lexbuf; initial_linebegin lexbuf }
+  | whitespace_char_no_newline + as c  { Echo.print_if c; initial lexbuf }
+  | "/*" as c                          { Echo.print_if c; multiline_comment lexbuf; initial lexbuf }
+  | "//" as c                          { Echo.print_if c; singleline_comment lexbuf; initial lexbuf }
   | integer_constant as c         { Echo.print_if c; CONSTANT }
-  | decimal_floating_constant as c  { Echo.print_if c; CONSTANT }
+  | decimal_floating_constant as c     { Echo.print_if c; CONSTANT }
   | hexadecimal_floating_constant as c { Echo.print_if c; CONSTANT }
-  | preprocessing_number          { failwith "These characters form a preprocessor number, but not a constant" }
-  | (['L' 'u' 'U']|"") "'" as c        { Echo.print_if c; char lexbuf; char_literal_end lexbuf; CONSTANT }
-  | (['L' 'u' 'U']|""|"u8") "\"" as c  { Echo.print_if c; string_literal lexbuf; STRING_LITERAL }
+  | preprocessing_number     { failwith "These characters form a preprocessor number, but not a constant" }
+  | (""|"L"|"u"|"U") "'" as c     { Echo.print_if c; CONSTANT }
+  | (""|"L"|"u"|"U"|"u8") "\"" as c
+                                  { Echo.print_if c; STRING_LITERAL }
   | "..." as c                         { Echo.print_if c; ELLIPSIS }
-  | "+=" as c                          { Echo.print_if c; ADD_ASSIGN }
-  | "-=" as c                            { Echo.print_if c; SUB_ASSIGN }
-  | "*=" as c                            { Echo.print_if c; MUL_ASSIGN }
-  | "/=" as c                            { Echo.print_if c; DIV_ASSIGN }
-  | "%=" as c                            { Echo.print_if c; MOD_ASSIGN }
-  | "|=" as c                            { Echo.print_if c; OR_ASSIGN }
-  | "&=" as c                            { Echo.print_if c; AND_ASSIGN }
-  | "^=" as c                            { Echo.print_if c; XOR_ASSIGN }
-  | "<<=" as c                           { Echo.print_if c; LEFT_ASSIGN }
-  | ">>=" as c                           { Echo.print_if c; RIGHT_ASSIGN }
-  | "<<" as c                            { Echo.print_if c; LEFT }
-  | ">>" as c                            { Echo.print_if c; RIGHT }
-  | "==" as c                            { Echo.print_if c; EQEQ }
-  | "!=" as c                            { Echo.print_if c; NEQ }
-  | "<=" as c                            { Echo.print_if c; LEQ }
-  | ">=" as c                            { Echo.print_if c; GEQ }
-  | "=" as c                             { Echo.print_char_if c; EQ }
-  | "<" as c                             { Echo.print_char_if c; LT }
-  | ">" as c                             { Echo.print_char_if c; GT }
-  | "++" as c                            { Echo.print_if c; INC }
-  | "--" as c                            { Echo.print_if c; DEC }
-  | "->" as c                            { Echo.print_if c; PTR }
-  | "+" as c                             { Echo.print_char_if c; PLUS }
-  | "-" as c                             { Echo.print_char_if c; MINUS }
-  | "*" as c                             { Echo.print_char_if c; STAR }
-  | "/" as c                             { Echo.print_char_if c; SLASH }
-  | "%" as c                             { Echo.print_char_if c; PERCENT }
-  | "!" as c                             { Echo.print_char_if c; BANG }
-  | "&&" as c                            { Echo.print_if c; ANDAND }
-  | "||" as c                            { Echo.print_if c; BARBAR }
-  | "&" as c                             { Echo.print_char_if c; AND }
-  | "|" as c                             { Echo.print_char_if c; BAR }
-  | "^" as c                             { Echo.print_char_if c; HAT }
-  | "?" as c                             { Echo.print_char_if c; QUESTION }
-  | ":" as c                             { Echo.print_char_if c; COLON }
-  | "~" as c                             { Echo.print_char_if c; TILDE }
-  | "{"|"<%" as c                        { Echo.print_if c; LBRACE }
-  | "}"|"%>" as c                        { Echo.print_if c; RBRACE }
-  | "["|"<:" as c                        { Echo.print_if c; LBRACK }
-  | "]"|":>"as c                       { Echo.print_if c; RBRACK }
-  | "(" as c                             { Echo.print_char_if c; LPAREN }
-  | ")" as c                             { Echo.print_char_if c; RPAREN }
-  | ";" as c                             { Echo.print_char_if c; SEMICOLON }
-  | "," as c                             { Echo.print_char_if c; COMMA }
-  | "." as c                             { Echo.print_char_if c; DOT }
-  | "_Alignas" as c                      { Echo.print_if c; ALIGNAS }
-  | "_Alignof" as c                      { Echo.print_if c; ALIGNOF }
-  | "_Atomic" as c                       { Echo.print_if c; ATOMIC }
-  | "_Bool" as c                         { Echo.print_if c; BOOL }
-  | "_Complex" as c                      { Echo.print_if c; COMPLEX }
-  | "_Generic" as c                      { Echo.print_if c; GENERIC }
-  | "__extension__" as c                 { Echo.print_if c; initial lexbuf} (*Just as with CompCert, we ignore "__extension__"*)
-  | "_Imaginary" as c                    { Echo.print_if c; IMAGINARY }
-  | "_Noreturn" as c                     { Echo.print_if c; NORETURN }
-  | "_Static_assert" as c                { Echo.print_if c; STATIC_ASSERT }
-  | "_Thread_local" as c                 { Echo.print_if c; THREAD_LOCAL }
-  | "auto" as c                          { Echo.print_if c; AUTO }
-  | "break" as c                         { Echo.print_if c; BREAK }
-  | "case" as c                          { Echo.print_if c; CASE }
-  | "char" as c                          { Echo.print_if c; CHAR }
-  | "const" as c                         { Echo.print_if c; CONST }
-  | "continue" as c                      { Echo.print_if c; CONTINUE }
-  | "default" as c                       { Echo.print_if c; DEFAULT }
-  | "do" as c                            { Echo.print_if c; DO }
-  | "double" as c                        { Echo.print_if c; DOUBLE }
-  | "else" as c                          { Echo.print_if c; ELSE }
-  | "enum" as c                          { Echo.print_if c; ENUM }
-  | "extern" as c                        { Echo.print_if c; EXTERN }
-  | "float" as c                         { Echo.print_if c; FLOAT }
-  | "for" as c                           { Echo.print_if c; FOR }
-  | "goto" as c                          { Echo.print_if c; GOTO }
-  | "if" as c                            { Echo.print_if c; IF }
-  | "inline" as c                        { Echo.print_if c; INLINE }
-  | "int" as c                           { Echo.print_if c; INT }
-  | "long" as c                          { Echo.print_if c; LONG }
-  | "register" as c                      { Echo.print_if c; REGISTER }
-  | "restrict" as c                      { Echo.print_if c; RESTRICT }
-  | "return" as c                        { Echo.print_if c; RETURN }
-  | "short" as c                         { Echo.print_if c; SHORT }
-  | "signed" as c                        { Echo.print_if c; SIGNED }
-  | "sizeof" as c                        { Echo.print_if c; SIZEOF }
-  | "static" as c                        { Echo.print_if c; STATIC }
-  | "struct" as c                        { Echo.print_if c; STRUCT }
-  | "switch" as c                        { Echo.print_if c; SWITCH }
-  | "typedef" as c                       { Echo.print_if c; TYPEDEF }
-  | "union" as c                         { Echo.print_if c; UNION }
-  | "unsigned" as c                      { Echo.print_if c; UNSIGNED }
-  | "void" as c                          { Echo.print_if c; VOID }
-  | "volatile" as c                      { Echo.print_if c; VOLATILE }
-  | "while" as c                         { Echo.print_if c; WHILE }
-  | identifier as id              { Echo.print_if id; NAME id }
+  | "+=" as c                         { Echo.print_if c; ADD_ASSIGN }
+  | "-=" as c                         { Echo.print_if c; SUB_ASSIGN }
+  | "*=" as c                           { Echo.print_if c; MUL_ASSIGN }
+  | "/=" as c                           { Echo.print_if c; DIV_ASSIGN }
+  | "%=" as c                           { Echo.print_if c; MOD_ASSIGN }
+  | "|=" as c                           { Echo.print_if c; OR_ASSIGN }
+  | "&=" as c                           { Echo.print_if c; AND_ASSIGN }
+  | "^=" as c                           { Echo.print_if c; XOR_ASSIGN }
+  | "<<=" as c                        { Echo.print_if c; LEFT_ASSIGN }
+  | ">>=" as c                        { Echo.print_if c; RIGHT_ASSIGN }
+  | "<<" as c                         { Echo.print_if c; LEFT }
+  | ">>" as c                         { Echo.print_if c; RIGHT }
+  | "==" as c                         { Echo.print_if c; EQEQ }
+  | "!=" as c                         { Echo.print_if c; NEQ }
+  | "<=" as c                         { Echo.print_if c; LEQ }
+  | ">=" as c                         { Echo.print_if c; GEQ }
+  | "=" as c                          { Echo.print_char_if c; EQ }
+  | "<" as c                          { Echo.print_char_if c; LT }
+  | ">" as c                          { Echo.print_char_if c; GT }
+  | "++" as c                         { Echo.print_if c; INC }
+  | "--" as c                         { Echo.print_if c; DEC }
+  | "->" as c                         { Echo.print_if c; PTR }
+  | "+" as c                          { Echo.print_char_if c; PLUS }
+  | "-" as c                          { Echo.print_char_if c; MINUS }
+  | "*" as c                          { Echo.print_char_if c; STAR }
+  | "/" as c                          { Echo.print_char_if c; SLASH }
+  | "%" as c                          { Echo.print_char_if c; PERCENT }
+  | "!" as c                          { Echo.print_char_if c; BANG }
+  | "&&" as c                         { Echo.print_if c; ANDAND }
+  | "||" as c                         { Echo.print_if c; BARBAR }
+  | "&" as c                          { Echo.print_char_if c; AND }
+  | "|" as c                          { Echo.print_char_if c; BAR }
+  | "^" as c                          { Echo.print_char_if c; HAT }
+  | "?" as c                          { Echo.print_char_if c; QUESTION }
+  | ":" as c                          { Echo.print_char_if c; COLON }
+  | "~" as c                          { Echo.print_char_if c; TILDE }
+  | "{"|"<%" as c                     { Echo.print_if c; LBRACE }
+  | "}"|"%>" as c                     { Echo.print_if c; RBRACE }
+  | "["|"<:" as c                     { Echo.print_if c; LBRACK }
+  | "]"|":>" as c                     { Echo.print_if c; RBRACK }
+  | "(" as c                          { Echo.print_char_if c; LPAREN }
+  | ")" as c                          { Echo.print_char_if c; RPAREN }
+  | ";" as c                          { Echo.print_char_if c; SEMICOLON }
+  | "," as c                          { Echo.print_char_if c; COMMA }
+  | "." as c                          { Echo.print_char_if c; DOT }
+  | identifier as id              {
+    Echo.print_if id; 
+    if SSet.mem id !ignored_keywords then
+      initial lexbuf
+    else
+      try Hashtbl.find lexicon id 
+      with Not_found -> PRE_NAME id }
   | eof                           { EOF }
-  | _                             { failwith "Lexer error" }
+  | _                       { failwith "Lexer error" }
 
 and initial_linebegin = parse
   | '\n'                          { Echo.print_always "\n"; new_line lexbuf; initial_linebegin lexbuf }
-  | whitespace_char_no_newline as c    { Echo.print_char_if c; initial_linebegin lexbuf }
-  | '#' | "%:" as c                    { Echo.print_always c; hash lexbuf }
-  | ""                            { initial lexbuf }
-
-and char = parse
-  | simple_escape_sequence        { }
-  | octal_escape_sequence         { }
-  | hexadecimal_escape_sequence   { }
-  | universal_character_name      { }
-  | '\\' _                        { failwith "incorrect escape sequence" }
-  | _                             { }
-
-and char_literal_end = parse
-  | '\''       { }
-  | '\n' | eof { failwith "missing terminating \"'\" character" }
-  | ""         { char lexbuf; char_literal_end lexbuf }
-
-and string_literal = parse
-  | '\"'       { }
-  | '\n' | eof { failwith "missing terminating '\"' character" }
-  | ""         { char lexbuf; string_literal lexbuf }
+  | whitespace_char_no_newline as c   { Echo.print_char_if c; initial_linebegin lexbuf }
+  | '#'                          { Echo.print_always "#"; hash lexbuf }
+  | ""                           { initial lexbuf }
 
 (* We assume gcc -E syntax but try to tolerate variations. *)
 and hash = parse
-  | whitespace_char_no_newline+ digit* whitespace_char_no_newline*
-    "\"" [^ '\n' '\"']* "\"" [^ '\n']* '\n' as s
-    (*TODO: copied from below, does pattern matching fall through for LEX?*)
-    { Echo.print_always s; new_line lexbuf; initial_linebegin lexbuf }
-  | whitespace_char_no_newline* "pragma"
-    whitespace_char_no_newline+ [^ '\n']* '\n' as s
-      { Echo.print_always s; new_line lexbuf; initial_linebegin lexbuf }
+  | whitespace_char_no_newline +
+    (digit +)
+    whitespace_char_no_newline *
+    "\"" ([^ '\n' '\"']*) "\""
+    [^ '\n']* '\n' as c
+      { Echo.print_always c; (*JOSH - need? not there new_line lexbuf;*) initial_linebegin lexbuf }
+  | whitespace_char_no_newline *
+    "pragma"
+    whitespace_char_no_newline +
+    ([^ '\n']* as s) '\n' as c
+      { Echo.print_always c; new_line lexbuf; PRAGMA s }
+  | [^ '\n']* '\n' as c
+      { Echo.print_always c; new_line lexbuf; initial_linebegin lexbuf }
   | [^ '\n']* eof
       { failwith "unexpected end of file" }
   | _
@@ -300,58 +333,27 @@ and singleline_comment = parse
       else
         initial lexbuf
 
-  (* In the following, we define a new lexer, which wraps [lexer], and applies
-     the following two transformations to the token stream:
-
-     - A [NAME] token is replaced with a sequence of either [NAME VARIABLE] or
-       [NAME TYPE]. The decision is made via a call to [Context.is_typedefname].
-       The call takes place only when the second element of the sequence is
-       demanded.
-
-     - When [Options.atomic_strict_syntax] is [true] and an opening parenthesis
-       [LPAREN] follows an [ATOMIC] keyword, the parenthesis is replaced by a
-       special token, [ATOMIC_LPAREN], so as to allow the parser to treat it
-       specially. *)
-
-  (* This second lexer is implemented using a 3-state state machine, whose
-     states are as follows. *)
-
-  type lexer_state =
-    | SRegular          (* Nothing to recall from the previous tokens. *)
-    | SAtomic           (* The previous token was [ATOMIC]. If an opening
-                           parenthesis follows, then it needs special care. *)
-    | SIdent of string  (* We have seen an identifier: we have just
-                           emitted a [NAME] token. The next token will be
-                           either [VARIABLE] or [TYPE], depending on
-                           what kind of identifier this is. *)
-
-  let lexer : lexbuf -> token =
-    let st = ref SRegular in
+  let lexer_aux tokens : lexbuf -> Parser.token =
+    let curr_id = ref None in
+    types_context := init_ctx;
     fun lexbuf ->
-      match !st with
+      match !curr_id with
+      | Some id ->
+        curr_id := None;
+        let token =
+          if SSet.mem id !types_context then Parser.TYPEDEF_NAME (id, ref TypedefId)
+          else Parser.VAR_NAME (id, ref VarId)
+        in
+        Queue.push token tokens;
+        token
+      | None ->
+        let token = lexer lexbuf in
+        begin match token with
+        | PRE_NAME id -> curr_id := Some id
+        | _ -> Queue.push token tokens
+        end;
+        token
 
-      | SIdent id ->
-          st := SRegular;
-          if is_typedefname id then TYPE else VARIABLE
-
-      | SAtomic
-      | SRegular ->
-          let token = lexer lexbuf in
-          match !st, token with
-          | _, NAME id ->
-              st := SIdent id;
-              token
-
-          | SAtomic, LPAREN ->
-              st := SRegular;
-              ATOMIC_LPAREN
-
-          | _, ATOMIC ->
-              st := (if !atomic_strict_syntax then SAtomic else SRegular);
-              token
-
-          | _, _ ->
-              st := SRegular;
-              token
+    let lexer : lexbuf -> Parser.token = lexer_aux (Queue.create ())
 
 }
