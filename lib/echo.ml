@@ -33,7 +33,7 @@ let gen_whitespace (n: int) : string =
   String.make n ' '
 
 let set_printing () : unit =
-  print_on := not (has_name !curr_name);
+  print_on := has_name !curr_name;
   (*If printing is disabled, we should not print the last token, so we replace
      it with the appropriate number of whitespace characters*)
   if not !print_on then
