@@ -133,8 +133,8 @@ let nondigit = ['_' 'a'-'z' 'A'-'Z']
 let hex_quad = hexadecimal_digit hexadecimal_digit
                  hexadecimal_digit hexadecimal_digit
 let universal_character_name =
-    "\\u" (hex_quad as n)
-  | "\\U" (hex_quad hex_quad as n)
+    "\\u" (hex_quad)
+  | "\\U" (hex_quad hex_quad)
 
 let identifier_nondigit =
     nondigit
@@ -210,8 +210,8 @@ let simple_escape_sequence =
 let octal_escape_sequence =
   '\\' ((octal_digit
          | octal_digit octal_digit
-         | octal_digit octal_digit octal_digit) as n)
-let hexadecimal_escape_sequence = "\\x" (hexadecimal_digit+ as n)
+         | octal_digit octal_digit octal_digit))
+let hexadecimal_escape_sequence = "\\x" (hexadecimal_digit+)
 
 rule initial = parse
   | '\n'                          { Echo.print_always "\n"; new_line lexbuf; initial_linebegin lexbuf }
@@ -222,9 +222,9 @@ rule initial = parse
   | decimal_floating_constant as c     { Echo.print_if c; CONSTANT }
   | hexadecimal_floating_constant as c { Echo.print_if c; CONSTANT }
   | preprocessing_number     { failwith "These characters form a preprocessor number, but not a constant" }
-  | (""|"L"|"u"|"U") "'" as c     { Echo.print_if c; CONSTANT }
+  | (""|"L"|"u"|"U") "'" as c     { Echo.print_if c; char lexbuf; char_literal_end lexbuf; CONSTANT }
   | (""|"L"|"u"|"U"|"u8") "\"" as c
-                                  { Echo.print_if c; STRING_LITERAL }
+                                  { Echo.print_if c; string_literal lexbuf; STRING_LITERAL }
   | "..." as c                         { Echo.print_if c; ELLIPSIS }
   | "+=" as c                         { Echo.print_if c; ADD_ASSIGN }
   | "-=" as c                         { Echo.print_if c; SUB_ASSIGN }
@@ -286,6 +286,24 @@ and initial_linebegin = parse
   | whitespace_char_no_newline as c   { Echo.print_char_if c; initial_linebegin lexbuf }
   | '#'                          { Echo.print_always "#"; hash lexbuf }
   | ""                           { initial lexbuf }
+
+and char = parse
+  | simple_escape_sequence as c        { Echo.print_if c }
+  | octal_escape_sequence as c         { Echo.print_if c }
+  | hexadecimal_escape_sequence as c   { Echo.print_if c }
+  | universal_character_name as c      { Echo.print_if c }
+  | '\\' _                        { failwith "incorrect escape sequence" }
+  | _ as c                             { Echo.print_char_if c }
+
+and char_literal_end = parse
+  | '\'' as c       { Echo.print_char_if c}
+  | '\n' | eof { failwith "missing terminating \"'\" character" }
+  | ""         { char lexbuf; char_literal_end lexbuf }
+
+and string_literal = parse
+  | '\"' as c      { Echo.print_char_if c }
+  | '\n' | eof { failwith "missing terminating '\"' character" }
+  | ""         { char lexbuf; string_literal lexbuf }
 
 (* We assume gcc -E syntax but try to tolerate variations. *)
 and hash = parse
