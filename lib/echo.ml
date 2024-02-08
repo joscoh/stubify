@@ -44,7 +44,7 @@ let set_printing () : unit =
 
 let reset_printing () : unit =
   (*If print_on was false, need to add a closing curly brace and remove the last buffer elt (which is whitespace)*)
-  if not !print_on then buffer := "}";
+  if not !print_on then buffer := "extern void stub_error(char *); stub_error(\"" ^ !curr_name ^ "\"); while(1);}";
   print_on := true
 
 (*The printing functions are a bit of a misnomer. They print the previous
